@@ -1,0 +1,22 @@
+# Binarios compilados
+agenda
+agenda.exe
+*.exe
+*.test
+*.out
+
+# Dependencias vendored
+/vendor/
+
+# Variables de entorno (no subir credenciales reales)
+.env
+*.env
+
+# Configuracion local de herramientas / editores
+.claude/
+.vscode/
+.idea/
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db

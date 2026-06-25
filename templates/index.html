@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agenda</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Agenda de Contactos</h1>
+
+    {{if .Error}}
+    <div class="alert error">{{.Error}}</div>
+    {{end}}
+
+    <section class="card">
+      <h2>Nuevo Contacto</h2>
+      <form action="/contactos" method="POST">
+        <div class="grid-2">
+          <div class="campo">
+            <label>Nombre *</label>
+            <input type="text" name="nombre" required placeholder="Juan">
+          </div>
+          <div class="campo">
+            <label>Apellido *</label>
+            <input type="text" name="apellido" required placeholder="Pérez">
+          </div>
+          <div class="campo">
+            <label>Teléfono</label>
+            <input type="tel" name="telefono" placeholder="912345678">
+          </div>
+          <div class="campo">
+            <label>Email</label>
+            <input type="email" name="email" placeholder="juan@ejemplo.cl">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Agregar Contacto</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Contactos ({{len .Contactos}})</h2>
+      {{if .Contactos}}
+      <table>
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Apellido</th>
+            <th>Teléfono</th>
+            <th>Email</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Contactos}}
+          <tr>
+            <td>{{.Nombre}}</td>
+            <td>{{.Apellido}}</td>
+            <td>{{if .Telefono}}<a href="tel:{{.Telefono}}">{{.Telefono}}</a>{{else}}-{{end}}</td>
+            <td>{{if .Email}}<a href="mailto:{{.Email}}">{{.Email}}</a>{{else}}-{{end}}</td>
+            <td class="acciones">
+              <a href="/contactos/{{.ID}}/editar" class="btn btn-sm btn-editar">Editar</a>
+              <form action="/contactos/{{.ID}}/eliminar" method="POST" onsubmit="return confirm('¿Eliminar a {{.Nombre}} {{.Apellido}}?')">
+                <button type="submit" class="btn btn-sm btn-eliminar">Eliminar</button>
+              </form>
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p class="vacio">No hay contactos aún. ¡Agrega el primero!</p>
+      {{end}}
+    </section>
+  </div>
+</body>
+</html>

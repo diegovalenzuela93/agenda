@@ -1,0 +1,122 @@
+name: CI/CD - Agenda
+
+# Se ejecuta en cada push a main y tambien se puede lanzar a mano desde la pestana Actions.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  # github.repository => "usuario/repo" (debe quedar en minusculas para ghcr.io)
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ----------------------------------------------------------------------------
+  # CI: construye la imagen Docker y la publica en GitHub Container Registry.
+  # ----------------------------------------------------------------------------
+  ci-build-push:
+    name: CI - Build & Push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # necesario para publicar en ghcr.io con el GITHUB_TOKEN
+    steps:
+      - name: Checkout del codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login en GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }} # token automatico, no necesitas un PAT
+
+      - name: Build y push de la imagen
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ----------------------------------------------------------------------------
+  # CD: levanta un cluster kind EFIMERO dentro del runner, despliega los
+  # manifiestos de k8s/ y verifica que la app responda en /health.
+  # ----------------------------------------------------------------------------
+  cd-deploy-kind:
+    name: CD - Deploy en Kubernetes (kind)
+    needs: ci-build-push # solo corre si el CI termino bien
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read # para descargar la imagen que acaba de publicar el CI
+    steps:
+      - name: Checkout del codigo
+        uses: actions/checkout@v4
+
+      - name: Login en GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Descargar la imagen publicada por el CI
+        run: docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Crear cluster kind
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: agenda
+          config: k8s/kind-config.yml
+
+      - name: Cargar la imagen en kind
+        # Asi el cluster usa la imagen local (kind load) sin pedir credenciales a ghcr.io.
+        run: kind load docker-image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} --name agenda
+
+      - name: Desplegar Postgres
+        run: |
+          kubectl apply -f k8s/namespace.yml
+          kubectl apply -f k8s/secret.yml
+          kubectl apply -f k8s/postgres.yml
+          kubectl -n agenda rollout status deployment/postgres --timeout=180s
+
+      - name: Desplegar la app Agenda
+        run: |
+          kubectl apply -f k8s/agenda.yml
+          # Fijamos la imagen inmutable de este commit (tag = SHA) sobre el manifiesto.
+          kubectl -n agenda set image deployment/agenda \
+            agenda=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          kubectl -n agenda rollout status deployment/agenda --timeout=180s
+
+      - name: Smoke test (GET /health)
+        run: |
+          kubectl -n agenda port-forward svc/agenda 8080:8080 &
+          PF_PID=$!
+          sleep 5
+          ok=""
+          for i in $(seq 1 10); do
+            if curl -fsS http://localhost:8080/health; then
+              echo; echo "Health OK"; ok=1; break
+            fi
+            echo "Reintentando health... ($i/10)"; sleep 3
+          done
+          kill "$PF_PID" 2>/dev/null || true
+          if [ -z "$ok" ]; then echo "El smoke test fallo"; exit 1; fi
+
+      - name: Estado del cluster (diagnostico)
+        if: always() # se ejecuta aunque algo falle, para ver que paso
+        run: |
+          echo "===== Pods ====="
+          kubectl -n agenda get pods,svc -o wide
+          echo "===== Eventos ====="
+          kubectl -n agenda get events --sort-by=.lastTimestamp | tail -20
+          echo "===== Logs agenda ====="
+          kubectl -n agenda logs deployment/agenda --tail=50 || true

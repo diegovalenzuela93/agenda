@@ -1,0 +1,3 @@
+# Forzar finales de linea LF en todo el repo.
+# Evita que los CRLF de Windows rompan los scripts de shell en GitHub Actions (runner Linux).
+* text=auto eol=lf

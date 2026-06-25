@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Editar Contacto</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Editar Contacto</h1>
+
+    <section class="card">
+      <form action="/contactos/{{.ID}}/editar" method="POST">
+        <div class="grid-2">
+          <div class="campo">
+            <label>Nombre *</label>
+            <input type="text" name="nombre" required value="{{.Nombre}}">
+          </div>
+          <div class="campo">
+            <label>Apellido *</label>
+            <input type="text" name="apellido" required value="{{.Apellido}}">
+          </div>
+          <div class="campo">
+            <label>Teléfono</label>
+            <input type="tel" name="telefono" value="{{.Telefono}}">
+          </div>
+          <div class="campo">
+            <label>Email</label>
+            <input type="email" name="email" value="{{.Email}}">
+          </div>
+        </div>
+        <div class="acciones-form">
+          <a href="/" class="btn btn-cancelar">Cancelar</a>
+          <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+        </div>
+      </form>
+    </section>
+  </div>
+</body>
+</html>
